@@ -42,6 +42,25 @@ async function run() {
     const artifactsCollection = database.collection("artifacts");
     const userCollection = client.db("artifactsDB").collection("users");
 
+    app.get('/all', async(req,res)=>{
+      const cursor = artifactsCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
+ app.post('/all', async (req, res) => {
+        const newArtifact = {
+          ...req.body,
+        createdAt: new Date()
+        }
+        console.log('Adding new artifact', newArtifact)
+
+        const result = await artifactsCollection.insertOne(newArtifact);
+        res.send(result);
+    });
+
+
+
 
 
     app.get('/users', async(req,res)=>{
