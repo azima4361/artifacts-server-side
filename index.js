@@ -58,6 +58,7 @@ async function run() {
  app.post('/all', async (req, res) => {
   const newArtifact = {
     ...req.body,
+   artifactsCreatedAt: req.body.artifactsCreatedAt,
     createdAt: new Date(),
     likeCount: 0  
   };
@@ -74,6 +75,28 @@ app.get('/all/:id', async (req, res) => {
   const result = await artifactsCollection.findOne(query);
   res.send(result);
 })
+app.put('/all/:id', async (req, res) => {
+  const id = req.params.id;
+  const updatedData = req.body;
+
+  const filter = { _id: new ObjectId(id) };
+  const updateDoc = {
+    $set: {
+      name: updatedData.name,
+      image: updatedData.image,
+      type: updatedData.type,
+      historicalContext: updatedData.historicalContext,
+      createdAt: updatedData.createdAt,
+      artifactsCreatedAt: updatedData.artifactsCreatedAt,
+      discoveredAt: updatedData.discoveredAt,
+      discoveredBy: updatedData.discoveredBy,
+      presentLocation: updatedData.presentLocation
+    }
+  };
+
+  const result = await artifactsCollection.updateOne(filter, updateDoc);
+  res.send(result);
+});
 
  app.delete('/artifact/:id', async (req, res) => {
       const { id } = req.params;
