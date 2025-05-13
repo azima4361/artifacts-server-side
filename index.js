@@ -47,6 +47,13 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     })
+ app.get('/all/user', async (req, res) => {
+      const userEmail = req.query.email;
+      if (!userEmail) return res.status(400).json({ error: "Email required" });
+
+      const result = await artifactsCollection.find({ userEmail }).toArray();
+      res.send(result);
+    });
 
  app.post('/all', async (req, res) => {
   const newArtifact = {
@@ -68,13 +75,53 @@ app.get('/all/:id', async (req, res) => {
   res.send(result);
 })
 
+ app.delete('/artifact/:id', async (req, res) => {
+      const { id } = req.params;
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ error: 'Invalid artifact ID' });
+      }
 
+      try {
+        const result = await artifactsCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ error: 'Artifact not found' });
+        }
+
+        res.json({ deletedCount: result.deletedCount });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to delete artifact' });
+      }
+    });
+
+// app.patch('/artifact/like/:id', async (req, res) => {
+//   const artifactId = req.params.id;  
+//   const query = { _id: new ObjectId(artifactId) };
+
+//   try {
+    
+//     const updateDoc = {
+//       $inc: { likeCount: 1 }
+//     };
+
+//     const result = await artifactsCollection.updateOne(query, updateDoc);
+
+//     if (result.modifiedCount > 0) {
+//       res.status(200).json({ message: 'Like count updated successfully' });
+//     } else {
+//       res.status(400).json({ message: 'Failed to update like count' });
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: 'Server Error' });
+//   }
+// });
 app.patch('/artifact/like/:id', async (req, res) => {
-  const artifactId = req.params.id;  
+  const artifactId = req.params.id;
   const query = { _id: new ObjectId(artifactId) };
 
   try {
-    
     const updateDoc = {
       $inc: { likeCount: 1 }
     };
@@ -82,15 +129,39 @@ app.patch('/artifact/like/:id', async (req, res) => {
     const result = await artifactsCollection.updateOne(query, updateDoc);
 
     if (result.modifiedCount > 0) {
-      res.status(200).json({ message: 'Like count updated successfully' });
+      res.status(200).json({ updated: true });
     } else {
-      res.status(400).json({ message: 'Failed to update like count' });
+      res.status(400).json({ updated: false });
     }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
+
+ 
+
+app.patch('/users/like', async (req, res) => {
+  const { email, artifactId } = req.body;
+  const result = await userCollection.updateOne(
+    { email },
+    { $addToSet: { likedArtifacts: artifactId } }
+  );
+  res.send(result);
+});
+
+app.get('/users/liked/:email', async (req, res) => {
+  const email = req.params.email;
+  const user = await userCollection.findOne({ email });
+   console.log('Fetched user:', user);
+
+  if (!user?.likedArtifacts?.length) return res.send([]);
+
+  const query = { _id: { $in: user.likedArtifacts.map(id => new ObjectId(id)) } };
+  const likedArtifacts = await artifactsCollection.find(query).toArray();
+  res.send(likedArtifacts);
+});
+
 
 
 
@@ -110,7 +181,11 @@ app.get('/users/:email', async (req, res) => {
 })
 
 app.post('/users', async(req,res)=>{
-  const newUser = req.body;
+  // const newUser = req.body;
+  const newUser = {
+    ...req.body,
+    likedArtifacts: [], 
+  };
   console.log('creating new user',newUser);
   const result= await userCollection.insertOne(newUser);
   res.send(result);
