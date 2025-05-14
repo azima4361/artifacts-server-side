@@ -12,10 +12,34 @@ const port = process.env.PORT || 5000;
 // artifacts
 // PDpndwQI9FoeEntr
 
+// app.use(cors({
+//   origin:[
+//     'http://localhost:5173',
+//   ],
+//   credentials:true
+// }));
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
+
+// const verifyToken = (req,res, next)=>{
+//   // console.log('inside verify token middleware', req.cookies)
+//   const token = req?.cookies?.token;
+  
+//   if(!token){
+//     return res.status(401).send({message: "Unauthorized access"})
+//   }
+
+//   jwt.verify(token, process.env.JWT_SECRET,(err,decoded)=>{
+//     if(err){
+//       return res.status(401).send({message: "Unauthorized access"})
+//     }
+//     req.user= decoded;
+//     next();
+//   })
+  
+// }
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.mxvej.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -29,6 +53,7 @@ const client = new MongoClient(uri, {
   }
 });
 
+
 async function run() {
   try {
     
@@ -38,6 +63,28 @@ async function run() {
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
     const database= client.db("artifactsDB");
+
+
+//     app.post('/jwt', async(req,res)=>{
+//   const user = req.body;
+//   const token = jwt.sign(user,process.env.JWT_SECRET,{expiresIn: '1h'});
+//   res
+//   .cookie('token',token,{
+//     httpOnly: true,
+//     secure: process.env.NODE_ENV === 'production',
+//     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+//   })
+//   .send({success:true});
+// })
+// app.post('/logout', (req,res)=>{
+//  res
+//  .clearCookie('token',{
+//   httpOnly:true,
+//   secure: process.env.NODE_ENV === 'production',
+//     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+//  })
+//  .send({success:true})
+// }) 
 
     const artifactsCollection = database.collection("artifacts");
     const userCollection = client.db("artifactsDB").collection("users");
@@ -50,6 +97,9 @@ async function run() {
  app.get('/all/user', async (req, res) => {
       const userEmail = req.query.email;
       if (!userEmail) return res.status(400).json({ error: "Email required" });
+    //   if (req.user.email !== userEmail) {
+    // return res.status(403).send({ message: "Forbidden access" });
+  // }
 
       const result = await artifactsCollection.find({ userEmail }).toArray();
       res.send(result);
@@ -60,7 +110,8 @@ async function run() {
     ...req.body,
    artifactsCreatedAt: req.body.artifactsCreatedAt,
     createdAt: new Date(),
-    likeCount: 0  
+    likeCount: 0  ,
+    likedBy: []
   };
 
   console.log('Adding new artifact', newArtifact);
@@ -140,27 +191,36 @@ app.put('/all/:id', async (req, res) => {
 //     res.status(500).json({ message: 'Server Error' });
 //   }
 // });
-app.patch('/artifact/like/:id', async (req, res) => {
-  const artifactId = req.params.id;
-  const query = { _id: new ObjectId(artifactId) };
 
-  try {
-    const updateDoc = {
-      $inc: { likeCount: 1 }
-    };
+ app.patch('/artifact/like/:id', async (req, res) => {
+      const artifactId = req.params.id;
+      const artifact = await artifactsCollection.findOne({ _id: new ObjectId(artifactId) });
 
-    const result = await artifactsCollection.updateOne(query, updateDoc);
+      if (!artifact) return res.status(404).json({ message: 'Artifact not found' });
 
-    if (result.modifiedCount > 0) {
-      res.status(200).json({ updated: true });
-    } else {
-      res.status(400).json({ updated: false });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server Error' });
-  }
-});
+      const userEmail = req.body.email;
+      let updatedArtifact;
+
+      if (artifact.likedBy.includes(userEmail)) {
+        // Unlike
+        updatedArtifact = await artifactsCollection.findOneAndUpdate(
+          { _id: new ObjectId(artifactId) },
+          { $pull: { likedBy: userEmail }, $inc: { likeCount: -1 } },
+          { returnDocument: 'after' }
+        );
+      } else {
+        // Like
+        updatedArtifact = await artifactsCollection.findOneAndUpdate(
+          { _id: new ObjectId(artifactId) },
+          { $addToSet: { likedBy: userEmail }, $inc: { likeCount: 1 } },
+          { returnDocument: 'after' }
+        );
+      }
+
+      res.json(updatedArtifact.value);
+    });
+
+
 
  
 
@@ -224,6 +284,8 @@ app.patch('/users',async(req,res)=>{
   const result= await userCollection.updateOne(filter,updatedDoc);
   res.send(result);
 })
+
+
   } finally {
     
     // await client.close();
