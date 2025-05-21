@@ -18,28 +18,16 @@ const port = process.env.PORT || 5000;
 //   ],
 //   credentials:true
 // }));
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173", 
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
 
-// const verifyToken = (req,res, next)=>{
-//   // console.log('inside verify token middleware', req.cookies)
-//   const token = req?.cookies?.token;
-  
-//   if(!token){
-//     return res.status(401).send({message: "Unauthorized access"})
-//   }
 
-//   jwt.verify(token, process.env.JWT_SECRET,(err,decoded)=>{
-//     if(err){
-//       return res.status(401).send({message: "Unauthorized access"})
-//     }
-//     req.user= decoded;
-//     next();
-//   })
-  
-// }
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.mxvej.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -65,47 +53,102 @@ async function run() {
     const database= client.db("artifactsDB");
 
 
-//     app.post('/jwt', async(req,res)=>{
-//   const user = req.body;
-//   const token = jwt.sign(user,process.env.JWT_SECRET,{expiresIn: '1h'});
-//   res
-//   .cookie('token',token,{
-//     httpOnly: true,
-//     secure: process.env.NODE_ENV === 'production',
-//     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-//   })
-//   .send({success:true});
-// })
-// app.post('/logout', (req,res)=>{
-//  res
-//  .clearCookie('token',{
-//   httpOnly:true,
-//   secure: process.env.NODE_ENV === 'production',
-//     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-//  })
-//  .send({success:true})
-// }) 
+
+
+app.post('/jwt', async (req, res) => {
+  const {email} = req.body; 
+   if (!email) {
+    return res.status(400).send({ error: 'Email is required' });
+  }
+
+  const token = jwt.sign({email}, process.env.JWT_SECRET, { expiresIn: '2h' });
+
+  res
+    .cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    })
+    .send({ success: true });
+});
+app.post('/logout', (req, res) => {
+  res
+    .clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    })
+    .send({ success: true });
+});
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+    req.user = decoded;
+    next();
+  });
+};
+
 
     const artifactsCollection = database.collection("artifacts");
     const userCollection = client.db("artifactsDB").collection("users");
 
-    app.get('/all', async(req,res)=>{
-      const cursor = artifactsCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    })
- app.get('/all/user', async (req, res) => {
-      const userEmail = req.query.email;
-      if (!userEmail) return res.status(400).json({ error: "Email required" });
-    //   if (req.user.email !== userEmail) {
-    // return res.status(403).send({ message: "Forbidden access" });
-  // }
+    // app.get('/all', async(req,res)=>{
+    //   const cursor = artifactsCollection.find();
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // })
 
-      const result = await artifactsCollection.find({ userEmail }).toArray();
-      res.send(result);
-    });
+    app.get('/all', async (req, res) => {
+  const search = req.query.search;
 
- app.post('/all', async (req, res) => {
+  let query = {};
+  if (search) {
+    query = { name: { $regex: search, $options: 'i' } }; 
+  }
+
+  try {
+    const cursor = artifactsCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+  } catch (error) {
+    console.error('Error fetching artifacts:', error);
+    res.status(500).send({ message: 'Server Error' });
+  }
+});
+
+//  app.get('/all/user',verifyToken, async (req, res) => {
+//       const userEmail = req.query.email;
+//       if (!userEmail) return res.status(400).json({ error: "Email required" });
+//     //   if (req.user.email !== userEmail) {
+//     // return res.status(403).send({ message: "Forbidden access" });
+//   // }
+
+//       const result = await artifactsCollection.find({ userEmail }).toArray();
+//       res.send(result);
+//     });
+
+app.get('/all/user', verifyToken, async (req, res) => {
+  const userEmail = req.query.email;
+  const decodedEmail = req.user?.email;
+
+  if (userEmail !== decodedEmail) {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+
+  const result = await artifactsCollection.find({ userEmail }).toArray();
+  res.send(result);
+});
+
+
+ app.post('/all',verifyToken, async (req, res) => {
   const newArtifact = {
     ...req.body,
    artifactsCreatedAt: req.body.artifactsCreatedAt,
