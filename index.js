@@ -20,7 +20,11 @@ const port = process.env.PORT || 5000;
 // }));
 // app.use(cors());
 app.use(cors({
-  origin: "http://localhost:5173", 
+  origin: [
+      "http://localhost:5173",
+      "https://artifacts-client-side.web.app/",
+      "https://artifacts-client-side.firebaseapp.com/",
+    ], 
   credentials: true
 }));
 app.use(express.json());
@@ -45,9 +49,9 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     
-    await client.connect();
+    // await client.connect();
     
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
     const database= client.db("artifactsDB");
@@ -265,6 +269,20 @@ app.put('/all/:id', async (req, res) => {
 
 
 
+app.get('/artifacts/featured', async (req, res) => {
+  try {
+    const artifacts = await artifactsCollection
+      .find()
+      .sort({ likeCount: -1 }) 
+      .limit(6) 
+      .toArray();
+    res.send(artifacts);
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to fetch featured artifacts.' });
+  }
+});
+
+
  
 
 app.patch('/users/like', async (req, res) => {
@@ -287,6 +305,9 @@ app.get('/users/liked/:email', async (req, res) => {
   const likedArtifacts = await artifactsCollection.find(query).toArray();
   res.send(likedArtifacts);
 });
+
+
+
 
 
 
