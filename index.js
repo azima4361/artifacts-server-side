@@ -19,14 +19,23 @@ const port = process.env.PORT || 5000;
 //   credentials:true
 // }));
 // app.use(cors());
+// app.use(cors({
+//   origin: [
+//       "http://localhost:5173",
+//       "https://artifacts-client-side.web.app/",
+//       "https://artifacts-client-side.firebaseapp.com/",
+//     ], 
+//  credentials: 'include'
+// }));
 app.use(cors({
   origin: [
-      "http://localhost:5173",
-      "https://artifacts-client-side.web.app/",
-      "https://artifacts-client-side.firebaseapp.com/",
-    ], 
+    "http://localhost:5173",
+    "https://artifacts-client-side.web.app",
+    "https://artifacts-client-side.firebaseapp.com"
+  ],
   credentials: true
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
